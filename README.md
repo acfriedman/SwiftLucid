@@ -1,8 +1,8 @@
 # SwiftLucid
 
-A linter for Swift doc comments. It keeps every declaration explaining itself, in the shape Swift's doc
-format and DocC expect, and it can judge just the code a commit touches, so an existing codebase can
-start today.
+A linter for Swift doc comments. SwiftLucid keeps every declaration explaining itself, in the shape
+Swift's doc format and DocC expect. You can lint a whole codebase, or you can lint just the code each
+commit touches, so an existing project can start today.
 
 ## Why
 
