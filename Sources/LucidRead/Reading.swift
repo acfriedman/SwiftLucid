@@ -3,7 +3,8 @@
 ///
 /// The lint and the contract model are both built from one reading, and neither knows the other. An
 /// Objective-C header among the sources is not parsed: only the type names it declares are read, so a
-/// link to one resolves. A module's page is read as a page, for the lint to check and the app to show.
+/// link to one resolves. A package manifest is not read at all. A module's page is read as a page, for
+/// the lint to check and the app to show.
 public struct Reading: Sendable {
     /// Each file's path, as it is reported, and the declarations read from it, in the order given.
     public var files: [(file: String, entries: [DeclarationReader.Entry])]
@@ -21,7 +22,7 @@ public struct Reading: Sendable {
     /// - Parameter sources: Each file's path, as it should be reported, and its contents: Swift files,
     ///   any Objective-C headers whose types the Swift docs may link, and the module pages.
     public init(sources: [(file: String, source: String)]) {
-        let swift = sources.filter { $0.file.hasSuffix(".swift") }
+        let swift = sources.filter { $0.file.hasSuffix(".swift") && !SourceFiles.isManifest($0.file, source: $0.source) }
         let headers = sources.filter { $0.file.hasSuffix(".h") }
         modulePages = sources.filter { ModulePage.isPage($0.file) }.map { ModulePage.parse($0.source, file: $0.file) }
         let read = Timing.measure("parse", "\(swift.count) files") {

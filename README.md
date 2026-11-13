@@ -16,7 +16,42 @@ be in `.swiftlucid.json`, and a commit hook can judge only what a change touched
 - **macOS 14+** and a **Swift 6** toolchain (Xcode 16 or later).
 - **git**, for `--staged` and `--since`.
 
-## Getting started
+## Installation
+
+### Mint
+
+```bash
+mint install acfriedman/SwiftLucid
+```
+
+[Mint](https://github.com/yonaskolb/Mint) builds the tag you name, or the latest, and links `swiftlucid`
+into `~/.mint/bin`. A team pins one version in a `Mintfile` at the repository's root, holding the line
+`acfriedman/SwiftLucid@0.2.0`, and runs it with `mint run swiftlucid`.
+
+### Swift Package Manager
+
+For a version pinned in the repository with nothing to install, keep a small package beside the project,
+`BuildTools/Package.swift`:
+
+```swift
+// swift-tools-version: 6.0
+import PackageDescription
+
+let package = Package(
+    name: "BuildTools",
+    platforms: [.macOS(.v14)],
+    dependencies: [
+        .package(url: "https://github.com/acfriedman/SwiftLucid", exact: "0.2.0")
+    ],
+    targets: [.target(name: "BuildTools", path: "")]
+)
+```
+
+Add an empty `BuildTools/Empty.swift` for the target, commit both, and ignore `BuildTools/.build` and
+`BuildTools/.swiftpm`. Then `swift run -c release --package-path BuildTools swiftlucid` runs the pinned
+version, built once and kept until the pin changes; the first build takes a few minutes.
+
+### From source
 
 ```bash
 git clone https://github.com/acfriedman/SwiftLucid && cd SwiftLucid
@@ -24,11 +59,7 @@ swift build -c release
 .build/release/swiftlucid path/to/YourProject/Sources
 ```
 
-Each finding is one line in compiler format, so Xcode and GitHub Actions show it as is, and the exit status
-is 1 when any is an error, so the same command gates CI. A folder is walked for `.swift` files, and for `.h`
-files whose Objective-C types the docs may link, skipping hidden folders and those dependency managers
-fill: `SourcePackages`, `DerivedData`, `Pods`, and `Carthage`. Build for release: a debug build is several
-times slower on a large codebase.
+Build for release: a debug build is several times slower on a large codebase.
 
 ## Usage
 
@@ -36,7 +67,83 @@ times slower on a large codebase.
 | --- | --- |
 | `swiftlucid <paths>` | lints; `--include-tests` reads `*Tests` folders too, `--summary` prints only counts by rule, `--style <file>` reads a house style other than the nearest |
 | `swiftlucid --staged <paths>` | lints only the declarations the next commit adds or changes, for a pre-commit hook |
-| `swiftlucid --since <rev> <paths>` | lints only the declarations changed since a revision, for a pull request's check |
+| `swiftlucid --since <rev> <paths>` | lints only the declarations changed since a revision, for a build phase or a pull request's check |
+| `swiftlucid --version` | prints the version |
+
+Each finding is one line in compiler format, so Xcode shows it beside the code, and the exit status is 1
+when any is an error, so the same command gates a commit or a build. A folder is walked for `.swift`
+files, and for `.h` files whose Objective-C types the docs may link, skipping hidden folders and those
+dependency managers fill: `SourcePackages`, `DerivedData`, `Pods`, and `Carthage`.
+
+## Setup
+
+A codebase that predates its house style has findings nobody will fix at once, so SwiftLucid's hooks
+judge a change rather than the whole codebase. `--staged` and `--since` read the whole project, so links
+into untouched files resolve, but report only the declarations the change added or changed, a body edit
+included; code that only moved touches nothing.
+
+### Git pre-commit hook
+
+```bash
+#!/bin/sh
+# .git/hooks/pre-commit: lint the doc comments this commit adds or changes
+export PATH="$HOME/.mint/bin:$PATH"   # Git apps run hooks without your shell's PATH
+if command -v swiftlucid >/dev/null 2>&1; then
+  exec swiftlucid --staged .
+fi
+echo "warning: swiftlucid is not installed, so this commit's docs were not linted" >&2
+```
+
+Save it as `.git/hooks/pre-commit` and `chmod +x` it. A team commits it as `.githooks/pre-commit`
+instead, and each clone runs `git config core.hooksPath .githooks` once. For the version pinned in
+`BuildTools`, use `exec swift run --quiet -c release --package-path BuildTools swiftlucid --staged .`, or
+`exec mint run swiftlucid --staged .` with a `Mintfile`. `git commit --no-verify` skips the hook.
+
+With the [pre-commit](https://pre-commit.com) framework, add SwiftLucid to `.pre-commit-config.yaml`; it
+builds the tagged version itself:
+
+```yaml
+repos:
+  - repo: https://github.com/acfriedman/SwiftLucid
+    rev: 0.2.0
+    hooks:
+      - id: swiftlucid
+```
+
+### Xcode build phase
+
+Add a Run Script phase after Compile Sources, so Xcode shows findings on what you have changed since the
+last commit as you build:
+
+```bash
+cd "$SRCROOT"
+SDKROOT=$(xcrun --sdk macosx --show-sdk-path) \
+  swift run --quiet -c release --package-path BuildTools swiftlucid --since HEAD "$SRCROOT"
+```
+
+`SDKROOT` builds the tool for the Mac even in an iOS target. With a local install instead:
+
+```bash
+cd "$SRCROOT"
+export PATH="$HOME/.mint/bin:$PATH"
+if command -v swiftlucid >/dev/null 2>&1; then
+  swiftlucid --since HEAD "$SRCROOT"
+else
+  echo "warning: swiftlucid is not installed; see https://github.com/acfriedman/SwiftLucid#installation"
+fi
+```
+
+- **Xcode 15 and later** sandbox scripts, which stops SwiftLucid reading the sources and git. Set
+  **User Script Sandboxing** (`ENABLE_USER_SCRIPT_SANDBOXING`) to **No** for the target.
+- Uncheck **Based on dependency analysis**, so the phase runs on every build.
+- An error fails the build. While a team brings the style in, `"severity": "warning"` in
+  `.swiftlucid.json` shows findings without failing anything.
+- To show every finding rather than a change's, drop `--since HEAD`.
+
+### CI
+
+`swiftlucid --since origin/main .` judges a branch the same way, after a checkout that fetches the
+history back to the base, such as `fetch-depth: 0` in GitHub Actions.
 
 ## Rules
 
@@ -90,23 +197,6 @@ A protocol requirement inherits the protocol's doc, so SwiftLucid skips:
 - **members of a conformance extension** (`extension T: P`), for `missing-doc` only;
 - **memberwise initializers**, whose body only assigns their parameters;
 - **anything marked** `// swiftlucid:exempt <reason>` on the line above.
-
-## Hooks and CI
-
-A codebase that predates its house style has findings nobody will fix at once. `--staged` and `--since`
-read the whole project, so links into untouched files resolve, but report only the declarations the
-change added or changed, a body edit included. A declaration is matched by name, so code that only moved
-touches nothing. New and touched code answers to the style; the rest is left alone until someone works on
-it.
-
-```bash
-#!/bin/sh
-# .git/hooks/pre-commit: judge what this commit holds, staged edits only
-exec swiftlucid --staged .
-```
-
-In CI, `swiftlucid --since origin/main .` judges a branch the same way. A build phase can keep linting
-everything, with the house style's warnings keeping old findings from failing the build.
 
 ## House style
 

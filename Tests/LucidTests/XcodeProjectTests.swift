@@ -147,4 +147,12 @@ final class XcodeProjectTests: XCTestCase {
         XCTAssertEqual(found.map { String($0.dropFirst(root.path.count + 1)) }, ["App/Cart.h", "App/Planner.swift"])
         XCTAssertEqual(try SourceFiles.swiftFiles(under: root.path, includeTests: false).count, 1)
     }
+
+    func testAPackageManifestIsNotRead() {
+        let manifest = "// swift-tools-version: 6.0\nimport PackageDescription\n\nlet package = Package(name: \"BuildTools\")\n"
+        let found = Linter.check(sources: [("Package.swift", manifest), ("BuildTools/Package.swift", manifest),
+                                           ("BuildTools/Package@swift-5.9.swift", manifest), ("App/Package.swift", "struct Package {}")])
+        XCTAssertEqual(found.map { "\($0.file) \($0.rule.rawValue)" }, ["App/Package.swift missing-doc"],
+                       "Manifests describe a build and owe no docs; a type's file named like one is read.")
+    }
 }

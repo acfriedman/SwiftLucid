@@ -24,6 +24,19 @@ public enum SourceFiles {
         return extensions.contains(ext) && (ext != "md" || ModulePage.isPage(path))
     }
 
+    /// Whether a file is a package manifest, which describes a build rather than declaring the project's
+    /// code, so it is not read: a pinned tool's `BuildTools/Package.swift` then owes no docs.
+    ///
+    /// - Parameters:
+    ///   - file: The file's path; a manifest is `Package.swift`, or a `Package@swift-<version>.swift`.
+    ///   - source: Its text, which a manifest opens with `// swift-tools-version`.
+    /// - Returns: `true` for a manifest; a type's file that happens to be named `Package.swift` is read.
+    public static func isManifest(_ file: String, source: String) -> Bool {
+        let name = (file as NSString).lastPathComponent
+        guard name == "Package.swift" || (name.hasPrefix("Package@swift-") && name.hasSuffix(".swift")) else { return false }
+        return source.drop(while: \.isWhitespace).hasPrefix("// swift-tools-version")
+    }
+
     /// Collects the `.swift` files under a path, or the path itself when it names one file.
     ///
     /// - Parameters:

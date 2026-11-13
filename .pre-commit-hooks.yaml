@@ -1,0 +1,10 @@
+# Lets the pre-commit framework (https://pre-commit.com) run SwiftLucid: it builds this package with
+# `swift build -c release` and runs the entry from the root of the repository being committed. The whole
+# project is read so links resolve, and only the declarations the commit adds or changes are judged.
+- id: swiftlucid
+  name: SwiftLucid
+  description: Lint the doc comments a commit adds or changes.
+  entry: swiftlucid --staged .
+  language: swift
+  pass_filenames: false
+  files: \.(swift|md)$

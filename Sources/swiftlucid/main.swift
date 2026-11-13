@@ -3,17 +3,24 @@ import LucidLint
 import Foundation
 
 /// Command-line entry: `swiftlucid [--include-tests] [--summary] [--style <file>] [--staged | --since <revision>] <path>...`
-/// lints every path, `--staged` and `--since` judging only the declarations a change added or changed.
+/// lints every path, `--staged` and `--since` judging only the declarations a change added or changed;
+/// `swiftlucid --version` prints the version, so a hook or a build phase can say which one ran.
 ///
 /// Paths may be files or directories; directories are walked for `.swift` files, skipping hidden folders,
 /// the folders dependency managers check code out into, and, unless `--include-tests` is given, any
 /// directory whose name ends in `Tests`. The lint follows the project's house style: the file `--style`
 /// names, else the nearest `.swiftlucid.json` in the current directory or above it, else SwiftLucid's own.
 let arguments = Array(CommandLine.arguments.dropFirst())
+/// The release this build is, as its tag names it.
+let version = "0.2.0"
 let includeTests = arguments.contains("--include-tests")
 let summaryOnly = arguments.contains("--summary")
 let staged = arguments.contains("--staged")
-let usage = "usage: swiftlucid [--include-tests] [--summary] [--style <file>] [--staged | --since <revision>] <path>...\n"
+let usage = """
+usage: swiftlucid [--include-tests] [--summary] [--style <file>] [--staged | --since <revision>] <path>...
+       swiftlucid --version
+
+"""
 var options: [String: String] = [:]
 var paths: [String] = []
 var index = 0
@@ -22,6 +29,10 @@ while index < arguments.count {
     index += 1
     if argument == "--help" || argument == "-h" {
         print(usage, terminator: "")
+        exit(0)
+    }
+    if argument == "--version" {
+        print(version)
         exit(0)
     }
     guard argument.hasPrefix("--") else { paths.append(argument); continue }
@@ -94,8 +105,9 @@ if !summaryOnly {
 }
 let byRule = Dictionary(grouping: diagnostics, by: \.rule).mapValues(\.count)
 let errors = diagnostics.filter { $0.severity == .error }.count
-// Headers and module pages are read for their names and prose, so the files counted are the Swift ones.
-let swiftCount = sources.filter { $0.file.hasSuffix(".swift") }.count
+// Headers and module pages are read for their names and prose, and manifests not at all, so the files
+// counted are the Swift ones.
+let swiftCount = sources.filter { $0.file.hasSuffix(".swift") && !SourceFiles.isManifest($0.file, source: $0.source) }.count
 let warnings = diagnostics.count - errors
 let judged = changed.map { "\($0.declarations) changed declaration\($0.declarations == 1 ? "" : "s")" }
     ?? "\(swiftCount) file\(swiftCount == 1 ? "" : "s")"
