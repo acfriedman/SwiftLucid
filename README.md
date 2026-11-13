@@ -6,9 +6,10 @@ commit touches, so an existing project can start today.
 
 ## Why
 
-Doc comments are the documentation closest to the code, and the first to drift: a parameter is added and
-its entry isn't, a link names a type that was renamed, a summary trails off. The compiler checks none of
-it. SwiftLucid does:
+Doc comments can be the most valuable documentation a codebase has, since they sit beside the code and
+show up in Quick Help and DocC. Yet doc comments drift. A parameter gets added without an entry, a link
+points at a renamed type, and the compiler never notices. SwiftLucid flags each gap, and says how to fix
+it:
 
 - **One shape for every doc.** A one- or two-sentence summary, what it does and then why, then a
   `- Parameter`, `- Returns:`, and `- Throws:` entry for everything the signature has. Quick Help, DocC,
